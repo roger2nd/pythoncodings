@@ -1,0 +1,203 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os\n",
+    "from os import listdir\n",
+    "from os.path import isfile, join\n",
+    "from os import walk\n",
+    "import pandas as pd\n",
+    "import numpy as np"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "mypath = 'dados/postos_pluviometricos_CE/slice'"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "onlyfiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def path_filter(filename=None, path=None):\n",
+    "        \n",
+    "        if type(path) == str: \n",
+    "            files_path = listdir(os.getcwd()) #Lista todos os arquivos e diretorios locais (local de execucao do script)\n",
+    "            sa = path.split('/')\n",
+    "            for n in files_path: #Verifica se o path fornecido existe no local de execucao do script. (Pastas)\n",
+    "                if n in sa: \n",
+    "                    sa = 0 \n",
+    "                    break #Sai do loop apos a primeira ocorrencia\n",
+    "            if bool(sa): raise TypeError('Caminho informado nao existe no diretorio atual')\n",
+    "        else: raise ValueError('Formato incorreto de string')        \n",
+    "        if type(filename) == str: #Asserta que o nome do arquivo seja um valor valido (string)\n",
+    "            files = [f for f in listdir(path) if isfile(join(path, f))] #Verifica se o arquivo existe no path fornecido (Arquivo)\n",
+    "            if filename in files: path = path + '/' + filename  #Monta o nome do caminho para o filename fornecido\n",
+    "            else: raise TypeError('Arquivo inexistente no caminho ou sem extensao')\n",
+    "        else: raise ValueError('Formato incorreto ' + str(filename) + '  ' + str(path) + ' deve ser uma string')\n",
+    "        return path"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def funceme_pluviometria (filename=None, path=None, sep=';', verbose=False):\n",
+    "    \n",
+    "        path = path_filter(filename=filename, path=path) #Verifica se o arquivo fornecido existe e monta o path\n",
+    "        if verbose: print('Convertendo '+filename+'...')\n",
+    "        \n",
+    "        if type(sep) == str:\n",
+    "            separador = ['.', ':', ';', ',']\n",
+    "            if sep in separador:\n",
+    "                db = pd.read_csv(path, sep=sep)\n",
+    "            else: raise ValueError('Separador deve ser . , ; :  default = \";\"')\n",
+    "        else: raise TypeError('sep deve ser string')\n",
+    "        \n",
+    "        Tamanho = db.shape[0]*31\n",
+    "        if Tamanho == 0:\n",
+    "            if verbose: print('Conteudo do '+filename+' nao possui dados')\n",
+    "            return 0, 0        \n",
+    "        \n",
+    "        Municipio = db.iloc[0,0]\n",
+    "        if ' ' in Municipio: Municipio = db.iloc[0,0].replace(' ','_') #Verifica e substitui espaços na string   \n",
+    "        Posto = db.iloc[0,1]\n",
+    "        if ' ' in Posto: Posto =  db.iloc[0,1].replace(' ', '_')\n",
+    "        posicao = [db.iloc[0,2], db.iloc[0,3]]\n",
+    "        col_name = Municipio + '_'+ Posto\n",
+    "        #Variaveis de Controle\n",
+    "        #inicio_ano = db.iloc[0,4]\n",
+    "        #fim_ano = db.iloc[len(db)-1, 4]\n",
+    "        #last_mes = db.iloc[len(db)-1, 5]\n",
+    "        #Tamanho = db.shape[0]*31\n",
+    "            \n",
+    "        #Formatando o dataframe\n",
+    "        db_dias = db.drop(['Municipios', 'Postos', 'Latitude', 'Longitude','Total'], axis=1)\n",
+    "        db_dias.index = db_dias.Anos\n",
+    "        db_dias = db_dias.drop(['Anos'], axis=1)\n",
+    "        \n",
+    "        #Construindo list dos \"anos\" a partir dos \"Anos\" do dataset\n",
+    "        anos = list()\n",
+    "        for n in db.Anos.drop_duplicates():\n",
+    "            anos.append(n)\n",
+    "        anos.sort()\n",
+    "        #Construindo list dos \"meses\" a partir dos \"Meses\" do dataset\n",
+    "        meses = list()\n",
+    "        for n in db.Meses.drop_duplicates():\n",
+    "            meses.append(n)\n",
+    "        meses.sort()\n",
+    "        #Listas para armazenamento da data individualizadas\n",
+    "        year = list()\n",
+    "        month = list()\n",
+    "        day = list()\n",
+    "        #Valor pluviometrico\n",
+    "        value = list()\n",
+    "        #Dicionario utlizado para construir a serie temporal -> pd.to_datetime\n",
+    "        dados = {'day':day, 'month':month, 'year':year, col_name: value}\n",
+    "        idi = 0 #Variavel de controle da posição dos indices do dataset\n",
+    "        #Bloco de contrucao das datas no formato colunas\n",
+    "        for a in anos:\n",
+    "            for m in meses:\n",
+    "                if idi >= len(db_dias): break\n",
+    "                if type(db_dias.loc[a, 'Meses'].tolist()) == float or type(db_dias.loc[a, 'Meses'].tolist()) == int: \n",
+    "                    if int(db_dias.loc[a, 'Meses'].tolist()) == m:\n",
+    "                        for d in db_dias.columns:\n",
+    "                            if d != 'Meses': \n",
+    "                                value.append(db_dias.iloc[idi, int(d.removeprefix('Dia'))])\n",
+    "                                year.append(a)\n",
+    "                                month.append(m)\n",
+    "                                day.append(int(d.removeprefix('Dia')))\n",
+    "                            else: pass\n",
+    "                        idi += 1\n",
+    "                    else: pass\n",
+    "                elif m in db_dias.loc[a, 'Meses'].tolist():#if sum(db_dias.loc[str(a), 'Meses'] == m): #Verifica se existe o mes \"m\" no ano \"a\"\n",
+    "                    for d in db_dias.columns:\n",
+    "                        if d != 'Meses': \n",
+    "                            value.append(db_dias.iloc[idi, int(d.removeprefix('Dia'))])\n",
+    "                            year.append(a)\n",
+    "                            month.append(m)\n",
+    "                            day.append(int(d.removeprefix('Dia')))\n",
+    "                        else: pass\n",
+    "                    idi += 1\n",
+    "                else: pass\n",
+    "        #Criando novo dataframe com a nova forma dos dados        \n",
+    "        df = pd.DataFrame(dados)\n",
+    "        if len(df) != Tamanho: \n",
+    "            print('O arquivo '+ filename + ' nao pode ser convertido corretamente')#Levanta erro e continua execuucao\n",
+    "            return 0, 0\n",
+    "        df.drop(df[df[col_name] == 888.0].index, inplace=True)\n",
+    "        df['Data'] = pd.to_datetime(dict(list(dados.items())[:3]), format='%d-%m-%Y', errors='coerce')\n",
+    "        if df.Data.isnull().sum() > 0: \n",
+    "            print('O arquivo '+ filename + ' foi convertido com valores NaN')#Levanta erro e continua a execucao\n",
+    "            return 0, 0\n",
+    "        \n",
+    "        df.index = df.Data\n",
+    "        \n",
+    "        dataframe = df.drop(dict(list(dados.items())[:3]).keys(), axis=1)\n",
+    "        dataframe = dataframe.drop(['Data'], axis=1)\n",
+    "        dataframe[col_name] = dataframe[col_name].replace(999.0, 0)\n",
+    "                \n",
+    "        return dataframe, col_name"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "for n in onlyfiles:\n",
+    "    df, name =  funceme_pluviometria(filename=n, path=mypath, sep=';', verbose=True)\n",
+    "    if name != 0:\n",
+    "        n = n.removesuffix('.txt') \n",
+    "        caminho = 'dados/postos_pluviometricos_CE/convertidos/pluviometria_'+ name +'_'+ n +'.csv'\n",
+    "        df.to_csv(caminho, index=True)"
+   ]
+  }
+ ],
+ "metadata": {
+  "interpreter": {
+   "hash": "789f696217030aad119f4d18151ecaad75983949809f38c2f6d57fda799d269c"
+  },
+  "kernelspec": {
+   "display_name": "Python 3.9.7 64-bit",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.9.7"
+  },
+  "orig_nbformat": 4
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
