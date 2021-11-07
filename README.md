@@ -1,2 +1,2 @@
 # pythoncodings
-Apreendendo python!
+Python | CPython | IPython
